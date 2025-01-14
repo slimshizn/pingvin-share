@@ -8,11 +8,15 @@ export const config = {
   },
 };
 
+const apiURL = process.env.API_URL || "http://localhost:8080";
+
+// A proxy to the API server only used in development.
+// In production this route gets overridden by Caddy.
 export default (req: NextApiRequest, res: NextApiResponse) => {
-  return httpProxyMiddleware(req, res, {
+  httpProxyMiddleware(req, res, {
     headers: {
-      "X-Forwarded-For": req.socket.remoteAddress ?? "",
+      "X-Forwarded-For": req.socket?.remoteAddress ?? "",
     },
-    target: "http://localhost:8080",
+    target: apiURL,
   });
 };

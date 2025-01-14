@@ -1,9 +1,9 @@
 import {
   ActionIcon,
+  Box,
   Button,
   Center,
   Group,
-  LoadingOverlay,
   Space,
   Stack,
   Table,
@@ -14,12 +14,15 @@ import { useClipboard } from "@mantine/hooks";
 import { useModals } from "@mantine/modals";
 import moment from "moment";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { TbLink, TbTrash } from "react-icons/tb";
-import showShareLinkModal from "../../components/account/showShareLinkModal";
+import { TbEdit, TbInfoCircle, TbLink, TbLock, TbTrash } from "react-icons/tb";
+import { FormattedMessage } from "react-intl";
 import Meta from "../../components/Meta";
-import useUser from "../../hooks/user.hook";
+import showShareInformationsModal from "../../components/account/showShareInformationsModal";
+import showShareLinkModal from "../../components/account/showShareLinkModal";
+import CenterLoader from "../../components/core/CenterLoader";
+import useConfig from "../../hooks/config.hook";
+import useTranslate from "../../hooks/useTranslate.hook";
 import shareService from "../../services/share.service";
 import { MyShare } from "../../types/share.type";
 import toast from "../../utils/toast.util";
@@ -27,8 +30,8 @@ import toast from "../../utils/toast.util";
 const MyShares = () => {
   const modals = useModals();
   const clipboard = useClipboard();
-  const router = useRouter();
-  const user = useUser();
+  const config = useConfig();
+  const t = useTranslate();
 
   const [shares, setShares] = useState<MyShare[]>();
 
@@ -36,49 +39,105 @@ const MyShares = () => {
     shareService.getMyShares().then((shares) => setShares(shares));
   }, []);
 
-  if (!user) {
-    router.replace("/");
-  } else {
-    if (!shares) return <LoadingOverlay visible />;
-    return (
-      <>
-        <Meta title="My shares" />
-        <Title mb={30} order={3}>
-          My shares
-        </Title>
-        {shares.length == 0 ? (
-          <Center style={{ height: "70vh" }}>
-            <Stack align="center" spacing={10}>
-              <Title order={3}>It's empty here 👀</Title>
-              <Text>You don't have any shares.</Text>
-              <Space h={5} />
-              <Button component={Link} href="/upload" variant="light">
-                Create one
-              </Button>
-            </Stack>
-          </Center>
-        ) : (
+  if (!shares) return <CenterLoader />;
+
+  return (
+    <>
+      <Meta title={t("account.shares.title")} />
+      <Title mb={30} order={3}>
+        <FormattedMessage id="account.shares.title" />
+      </Title>
+      {shares.length == 0 ? (
+        <Center style={{ height: "70vh" }}>
+          <Stack align="center" spacing={10}>
+            <Title order={3}>
+              <FormattedMessage id="account.shares.title.empty" />
+            </Title>
+            <Text>
+              <FormattedMessage id="account.shares.description.empty" />
+            </Text>
+            <Space h={5} />
+            <Button component={Link} href="/upload" variant="light">
+              <FormattedMessage id="account.shares.button.create" />
+            </Button>
+          </Stack>
+        </Center>
+      ) : (
+        <Box sx={{ display: "block", overflowX: "auto" }}>
           <Table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Visitors</th>
-                <th>Expires at</th>
+                <th>
+                  <FormattedMessage id="account.shares.table.id" />
+                </th>
+                <th>
+                  <FormattedMessage id="account.shares.table.name" />
+                </th>
+                <th>
+                  <FormattedMessage id="account.shares.table.visitors" />
+                </th>
+                <th>
+                  <FormattedMessage id="account.shares.table.expiresAt" />
+                </th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {shares.map((share) => (
                 <tr key={share.id}>
-                  <td>{share.id}</td>
-                  <td>{share.views}</td>
                   <td>
-                    {moment(share.expiration).unix() === 0
-                      ? "Never"
-                      : moment(share.expiration).format("LLL")}
+                    <Group spacing="xs">
+                      {share.id}{" "}
+                      {share.security.passwordProtected && (
+                        <TbLock
+                          color="orange"
+                          title={t("account.shares.table.password-protected")}
+                        />
+                      )}
+                    </Group>
+                  </td>
+                  <td>{share.name}</td>
+                  <td>
+                    {share.security.maxViews ? (
+                      <FormattedMessage
+                        id="account.shares.table.visitor-count"
+                        values={{
+                          count: share.views,
+                          max: share.security.maxViews,
+                        }}
+                      />
+                    ) : (
+                      share.views
+                    )}
+                  </td>
+                  <td>
+                    {moment(share.expiration).unix() === 0 ? (
+                      <FormattedMessage id="account.shares.table.expiry-never" />
+                    ) : (
+                      moment(share.expiration).format("LLL")
+                    )}
                   </td>
                   <td>
                     <Group position="right">
+                      <Link href={`/share/${share.id}/edit`}>
+                        <ActionIcon color="orange" variant="light" size={25}>
+                          <TbEdit />
+                        </ActionIcon>
+                      </Link>
+                      <ActionIcon
+                        color="blue"
+                        variant="light"
+                        size={25}
+                        onClick={() => {
+                          showShareInformationsModal(
+                            modals,
+                            share,
+                            parseInt(config.get("share.maxSize")),
+                          );
+                        }}
+                      >
+                        <TbInfoCircle />
+                      </ActionIcon>
                       <ActionIcon
                         color="victoria"
                         variant="light"
@@ -86,11 +145,9 @@ const MyShares = () => {
                         onClick={() => {
                           if (window.isSecureContext) {
                             clipboard.copy(
-                              `${window.location.origin}/share/${share.id}`
+                              `${window.location.origin}/s/${share.id}`,
                             );
-                            toast.success(
-                              "Your link was copied to the keyboard."
-                            );
+                            toast.success(t("common.notify.copied-link"));
                           } else {
                             showShareLinkModal(modals, share.id);
                           }
@@ -104,20 +161,25 @@ const MyShares = () => {
                         size={25}
                         onClick={() => {
                           modals.openConfirmModal({
-                            title: `Delete share ${share.id}`,
+                            title: t("account.shares.modal.delete.title", {
+                              share: share.id,
+                            }),
                             children: (
                               <Text size="sm">
-                                Do you really want to delete this share?
+                                <FormattedMessage id="account.shares.modal.delete.description" />
                               </Text>
                             ),
                             confirmProps: {
                               color: "red",
                             },
-                            labels: { confirm: "Confirm", cancel: "Cancel" },
+                            labels: {
+                              confirm: t("common.button.delete"),
+                              cancel: t("common.button.cancel"),
+                            },
                             onConfirm: () => {
                               shareService.remove(share.id);
                               setShares(
-                                shares.filter((item) => item.id !== share.id)
+                                shares.filter((item) => item.id !== share.id),
                               );
                             },
                           });
@@ -131,10 +193,10 @@ const MyShares = () => {
               ))}
             </tbody>
           </Table>
-        )}
-      </>
-    );
-  }
+        </Box>
+      )}
+    </>
+  );
 };
 
 export default MyShares;

@@ -1,16 +1,19 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { PrismaClient } from "@prisma/client";
+import { DATABASE_URL } from "../constants";
 
 @Injectable()
 export class PrismaService extends PrismaClient {
+  private readonly logger = new Logger(PrismaService.name);
+
   constructor() {
     super({
       datasources: {
         db: {
-          url: "file:../data/pingvin-share.db?connection_limit=1",
+          url: DATABASE_URL,
         },
       },
     });
-    super.$connect().then(() => console.info("Connected to the database"));
+    super.$connect().then(() => this.logger.log("Connected to the database"));
   }
 }

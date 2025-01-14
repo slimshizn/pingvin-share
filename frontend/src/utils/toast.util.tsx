@@ -1,25 +1,35 @@
-import { showNotification } from "@mantine/notifications";
+import { NotificationProps, showNotification } from "@mantine/notifications";
 import { TbCheck, TbX } from "react-icons/tb";
-const error = (message: string) =>
+import { FormattedMessage } from "react-intl";
+
+const error = (message: string, config?: Omit<NotificationProps, "message">) =>
   showNotification({
     icon: <TbX />,
     color: "red",
     radius: "md",
-    title: "Error",
-
+    title: <FormattedMessage id="common.error" />,
     message: message,
+
+    autoClose: true,
+
+    ...config,
   });
 
 const axiosError = (axiosError: any) =>
-  error(axiosError?.response?.data?.message ?? "An unknown error occured");
+  error(axiosError?.response?.data?.message ?? "An unknown error occurred");
 
-const success = (message: string) =>
+const success = (
+  message: string,
+  config?: Omit<NotificationProps, "message">,
+) =>
   showNotification({
     icon: <TbCheck />,
     color: "green",
     radius: "md",
-    title: "Success",
+    title: <FormattedMessage id="common.success" />,
     message: message,
+    autoClose: true,
+    ...config,
   });
 
 const toast = {

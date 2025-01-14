@@ -3,12 +3,15 @@ type User = {
   username: string;
   email: string;
   isAdmin: boolean;
+  isLdap: boolean;
+  totpVerified: boolean;
+  hasPassword: boolean;
 };
 
 export type CreateUser = {
   username: string;
   email: string;
-  password: string;
+  password?: string;
   isAdmin?: boolean;
 };
 
@@ -25,5 +28,10 @@ export type UpdateCurrentUser = {
 };
 
 export type CurrentUser = User & {};
+
+export type UserHook = {
+  user: CurrentUser | null;
+  refreshUser: () => Promise<CurrentUser | null>;
+};
 
 export default User;

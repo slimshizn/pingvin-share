@@ -1,24 +1,32 @@
-import { Button, Stack, Text, Title } from "@mantine/core";
+import { Button, Stack, Text } from "@mantine/core";
 import { useModals } from "@mantine/modals";
 import { ModalsContextProps } from "@mantine/modals/lib/context";
 import { useRouter } from "next/router";
+import { FormattedMessage } from "react-intl";
 
 const showErrorModal = (
   modals: ModalsContextProps,
   title: string,
-  text: string
+  text: string,
+  action: "go-back" | "go-home" = "go-back",
 ) => {
   return modals.openModal({
     closeOnClickOutside: false,
     withCloseButton: false,
     closeOnEscape: false,
-    title: <Title order={4}>{title}</Title>,
+    title: title,
 
-    children: <Body text={text} />,
+    children: <Body text={text} action={action} />,
   });
 };
 
-const Body = ({ text }: { text: string }) => {
+const Body = ({
+  text,
+  action,
+}: {
+  text: string;
+  action: "go-back" | "go-home";
+}) => {
   const modals = useModals();
   const router = useRouter();
   return (
@@ -28,10 +36,14 @@ const Body = ({ text }: { text: string }) => {
         <Button
           onClick={() => {
             modals.closeAll();
-            router.back();
+            if (action === "go-back") {
+              router.back();
+            } else if (action === "go-home") {
+              router.push("/");
+            }
           }}
         >
-          Go back
+          <FormattedMessage id={`common.button.${action}`} />
         </Button>
       </Stack>
     </>

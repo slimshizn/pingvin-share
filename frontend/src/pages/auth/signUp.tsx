@@ -1,24 +1,14 @@
-import { useRouter } from "next/router";
 import SignUpForm from "../../components/auth/SignUpForm";
 import Meta from "../../components/Meta";
-import useConfig from "../../hooks/config.hook";
-import useUser from "../../hooks/user.hook";
+import useTranslate from "../../hooks/useTranslate.hook";
 
 const SignUp = () => {
-  const config = useConfig();
-  const user = useUser();
-  const router = useRouter();
-  if (user) {
-    router.replace("/");
-  } else if (!config.get("ALLOW_REGISTRATION")) {
-    router.replace("/auth/signIn");
-  } else {
-    return (
-      <>
-        <Meta title="Sign Up" />
-        <SignUpForm />
-      </>
-    );
-  }
+  const t = useTranslate();
+  return (
+    <>
+      <Meta title={t("signup.title")} />
+      <SignUpForm />
+    </>
+  );
 };
 export default SignUp;

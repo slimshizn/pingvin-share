@@ -7,6 +7,9 @@ export class ShareDTO {
   id: string;
 
   @Expose()
+  name?: string;
+
+  @Expose()
   expiration: Date;
 
   @Expose()
@@ -17,13 +20,22 @@ export class ShareDTO {
   @Type(() => PublicUserDTO)
   creator: PublicUserDTO;
 
+  @Expose()
+  description: string;
+
+  @Expose()
+  hasPassword: boolean;
+
+  @Expose()
+  size: number;
+
   from(partial: Partial<ShareDTO>) {
     return plainToClass(ShareDTO, partial, { excludeExtraneousValues: true });
   }
 
   fromList(partial: Partial<ShareDTO>[]) {
     return partial.map((part) =>
-      plainToClass(ShareDTO, part, { excludeExtraneousValues: true })
+      plainToClass(ShareDTO, part, { excludeExtraneousValues: true }),
     );
   }
 }

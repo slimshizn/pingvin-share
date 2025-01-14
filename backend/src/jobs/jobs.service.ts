@@ -1,15 +1,20 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import * as fs from "fs";
 import * as moment from "moment";
 import { FileService } from "src/file/file.service";
 import { PrismaService } from "src/prisma/prisma.service";
+import { ReverseShareService } from "src/reverseShare/reverseShare.service";
+import { SHARE_DIRECTORY } from "../constants";
 
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
+
   constructor(
     private prisma: PrismaService,
-    private fileService: FileService
+    private reverseShareService: ReverseShareService,
+    private fileService: FileService,
   ) {}
 
   @Cron("0 * * * *")
@@ -32,35 +37,105 @@ export class JobsService {
       await this.fileService.deleteAllFiles(expiredShare.id);
     }
 
-    if (expiredShares.length > 0)
-      console.log(`job: deleted ${expiredShares.length} expired shares`);
+    if (expiredShares.length > 0) {
+      this.logger.log(`Deleted ${expiredShares.length} expired shares`);
+    }
+  }
+
+  @Cron("0 * * * *")
+  async deleteExpiredReverseShares() {
+    const expiredReverseShares = await this.prisma.reverseShare.findMany({
+      where: {
+        shareExpiration: { lt: new Date() },
+      },
+    });
+
+    for (const expiredReverseShare of expiredReverseShares) {
+      await this.reverseShareService.remove(expiredReverseShare.id);
+    }
+
+    if (expiredReverseShares.length > 0) {
+      this.logger.log(
+        `Deleted ${expiredReverseShares.length} expired reverse shares`,
+      );
+    }
+  }
+
+  @Cron("0 */6 * * *")
+  async deleteUnfinishedShares() {
+    const unfinishedShares = await this.prisma.share.findMany({
+      where: {
+        createdAt: { lt: moment().subtract(1, "day").toDate() },
+        uploadLocked: false,
+      },
+    });
+
+    for (const unfinishedShare of unfinishedShares) {
+      await this.prisma.share.delete({
+        where: { id: unfinishedShare.id },
+      });
+
+      await this.fileService.deleteAllFiles(unfinishedShare.id);
+    }
+
+    if (unfinishedShares.length > 0) {
+      this.logger.log(`Deleted ${unfinishedShares.length} unfinished shares`);
+    }
   }
 
   @Cron("0 0 * * *")
   deleteTemporaryFiles() {
-    const files = fs.readdirSync("./data/uploads/_temp");
+    let filesDeleted = 0;
 
-    for (const file of files) {
-      const stats = fs.statSync(`./data/uploads/_temp/${file}`);
-      const isOlderThanOneDay = moment(stats.mtime)
-        .add(1, "day")
-        .isBefore(moment());
+    const shareDirectories = fs
+      .readdirSync(SHARE_DIRECTORY, { withFileTypes: true })
+      .filter((dirent) => dirent.isDirectory())
+      .map((dirent) => dirent.name);
 
-      if (isOlderThanOneDay) fs.rmSync(`./data/uploads/_temp/${file}`);
+    for (const shareDirectory of shareDirectories) {
+      const temporaryFiles = fs
+        .readdirSync(`${SHARE_DIRECTORY}/${shareDirectory}`)
+        .filter((file) => file.endsWith(".tmp-chunk"));
+
+      for (const file of temporaryFiles) {
+        const stats = fs.statSync(
+          `${SHARE_DIRECTORY}/${shareDirectory}/${file}`,
+        );
+        const isOlderThanOneDay = moment(stats.mtime)
+          .add(1, "day")
+          .isBefore(moment());
+
+        if (isOlderThanOneDay) {
+          fs.rmSync(`${SHARE_DIRECTORY}/${shareDirectory}/${file}`);
+          filesDeleted++;
+        }
+      }
     }
 
-    console.log(`job: deleted ${files.length} temporary files`);
+    this.logger.log(`Deleted ${filesDeleted} temporary files`);
   }
 
-  @Cron("0 * * * *")
-  async deleteExpiredRefreshTokens() {
-    const expiredRefreshTokens = await this.prisma.refreshToken.deleteMany({
+  @Cron("1 * * * *")
+  async deleteExpiredTokens() {
+    const { count: refreshTokenCount } =
+      await this.prisma.refreshToken.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+
+    const { count: loginTokenCount } = await this.prisma.loginToken.deleteMany({
       where: { expiresAt: { lt: new Date() } },
     });
 
-    if (expiredRefreshTokens.count > 0)
-      console.log(
-        `job: deleted ${expiredRefreshTokens.count} expired refresh tokens`
-      );
+    const { count: resetPasswordTokenCount } =
+      await this.prisma.resetPasswordToken.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+
+    const deletedTokensCount =
+      refreshTokenCount + loginTokenCount + resetPasswordTokenCount;
+
+    if (deletedTokensCount > 0) {
+      this.logger.log(`Deleted ${deletedTokensCount} expired refresh tokens`);
+    }
   }
 }

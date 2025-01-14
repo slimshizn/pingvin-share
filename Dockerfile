@@ -1,44 +1,49 @@
-# Using node slim because prisma ORM needs libc for ARM builds
-
-# Stage 1: on frontend dependency change
-FROM node:18-slim AS frontend-dependencies
+# Stage 1: Frontend dependencies
+FROM node:20-alpine AS frontend-dependencies
 WORKDIR /opt/app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
-# Stage 2: on frontend change
-FROM node:18-slim AS frontend-builder
+# Stage 2: Build frontend
+FROM node:20-alpine AS frontend-builder
 WORKDIR /opt/app
 COPY ./frontend .
 COPY --from=frontend-dependencies /opt/app/node_modules ./node_modules
 RUN npm run build
 
-# Stage 3: on backend dependency change
-FROM node:18-slim AS backend-dependencies
+# Stage 3: Backend dependencies
+FROM node:20-alpine AS backend-dependencies
+RUN apk add --no-cache python3
 WORKDIR /opt/app
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
 
-# Stage 4:on backend change
-FROM node:18-slim AS backend-builder
-RUN apt-get update && apt-get install -y openssl
+# Stage 4: Build backend
+FROM node:20-alpine AS backend-builder
+RUN apk add openssl
+
 WORKDIR /opt/app
 COPY ./backend .
 COPY --from=backend-dependencies /opt/app/node_modules ./node_modules
 RUN npx prisma generate
-RUN npm run build  && npm prune --production
+RUN npm run build && npm prune --production
 
 # Stage 5: Final image
-FROM node:18-slim AS runner
-ENV NODE_ENV=production
-RUN apt-get update && apt-get install -y openssl
+FROM node:20-alpine AS runner
+ENV NODE_ENV=docker
+
+# Delete default node user
+RUN deluser --remove-home node
+
+RUN apk update --no-cache \
+    && apk upgrade --no-cache \
+    && apk add --no-cache curl caddy su-exec openssl
 
 WORKDIR /opt/app/frontend
 COPY --from=frontend-builder /opt/app/public ./public
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=frontend-builder /opt/app/.next/standalone ./
 COPY --from=frontend-builder /opt/app/.next/static ./.next/static
+COPY --from=frontend-builder /opt/app/public/img /tmp/img
 
 WORKDIR /opt/app/backend
 COPY --from=backend-builder /opt/app/node_modules ./node_modules
@@ -47,5 +52,13 @@ COPY --from=backend-builder /opt/app/prisma ./prisma
 COPY --from=backend-builder /opt/app/package.json ./
 
 WORKDIR /opt/app
+
+COPY ./reverse-proxy  /opt/app/reverse-proxy
+COPY ./scripts ./scripts
+
 EXPOSE 3000
-CMD node frontend/server.js & cd backend && npm run prod
+
+HEALTHCHECK --interval=10s --timeout=3s CMD curl -f http://localhost:3000/api/health || exit 1
+
+ENTRYPOINT ["sh", "./scripts/docker/create-user.sh"]
+CMD ["sh", "./scripts/docker/entrypoint.sh"]

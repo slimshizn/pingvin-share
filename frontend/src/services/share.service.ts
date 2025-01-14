@@ -1,41 +1,44 @@
+import { deleteCookie, setCookie } from "cookies-next";
+import mime from "mime-types";
+import { FileUploadResponse } from "../types/File.type";
+
 import {
+  CreateShare,
+  MyReverseShare,
   MyShare,
   Share,
   ShareMetaData,
-  ShareSecurity,
 } from "../types/share.type";
 import api from "./api.service";
 
-const create = async (
-  id: string,
-  expiration: string,
-  recipients: string[],
-  security?: ShareSecurity
-) => {
-  return (await api.post("shares", { id, expiration, recipients, security }))
-    .data;
+const list = async (): Promise<MyShare[]> => {
+  return (await api.get(`shares/all`)).data;
+};
+
+const create = async (share: CreateShare) => {
+  return (await api.post("shares", share)).data;
 };
 
 const completeShare = async (id: string) => {
-  return (await api.post(`shares/${id}/complete`)).data;
+  const response = (await api.post(`shares/${id}/complete`)).data;
+  deleteCookie("reverse_share_token");
+  return response;
+};
+
+const revertComplete = async (id: string) => {
+  return (await api.delete(`shares/${id}/complete`)).data;
 };
 
 const get = async (id: string): Promise<Share> => {
-  const shareToken = sessionStorage.getItem(`share_${id}_token`);
-  return (
-    await api.get(`shares/${id}`, {
-      headers: { "X-Share-Token": shareToken ?? "" },
-    })
-  ).data;
+  return (await api.get(`shares/${id}`)).data;
+};
+
+const getFromOwner = async (id: string): Promise<Share> => {
+  return (await api.get(`shares/${id}/from-owner`)).data;
 };
 
 const getMetaData = async (id: string): Promise<ShareMetaData> => {
-  const shareToken = sessionStorage.getItem(`share_${id}_token`);
-  return (
-    await api.get(`shares/${id}/metaData`, {
-      headers: { "X-Share-Token": shareToken ?? "" },
-    })
-  ).data;
+  return (await api.get(`shares/${id}/metaData`)).data;
 };
 
 const remove = async (id: string) => {
@@ -47,57 +50,112 @@ const getMyShares = async (): Promise<MyShare[]> => {
 };
 
 const getShareToken = async (id: string, password?: string) => {
-  const { token } = (await api.post(`/shares/${id}/token`, { password })).data;
-
-  sessionStorage.setItem(`share_${id}_token`, token);
+  await api.post(`/shares/${id}/token`, { password });
 };
 
 const isShareIdAvailable = async (id: string): Promise<boolean> => {
-  return (await api.get(`shares/isShareIdAvailable/${id}`)).data.isAvailable;
+  return (await api.get(`/shares/isShareIdAvailable/${id}`)).data.isAvailable;
 };
 
-const getFileDownloadUrl = async (shareId: string, fileId: string) => {
-  const shareToken = sessionStorage.getItem(`share_${shareId}_token`);
-  return (
-    await api.get(`shares/${shareId}/files/${fileId}/download`, {
-      headers: { "X-Share-Token": shareToken ?? "" },
-    })
-  ).data.url;
+const doesFileSupportPreview = (fileName: string) => {
+  const mimeType = (mime.contentType(fileName) || "").split(";")[0];
+
+  if (!mimeType) return false;
+
+  const supportedMimeTypes = [
+    mimeType.startsWith("video/"),
+    mimeType.startsWith("image/"),
+    mimeType.startsWith("audio/"),
+    mimeType.startsWith("text/"),
+    mimeType == "application/pdf",
+  ];
+
+  return supportedMimeTypes.some((isSupported) => isSupported);
 };
 
 const downloadFile = async (shareId: string, fileId: string) => {
-  window.location.href = await getFileDownloadUrl(shareId, fileId);
+  window.location.href = `${window.location.origin}/api/shares/${shareId}/files/${fileId}`;
+};
+
+const removeFile = async (shareId: string, fileId: string) => {
+  await api.delete(`shares/${shareId}/files/${fileId}`);
 };
 
 const uploadFile = async (
   shareId: string,
-  file: File,
-  progressCallBack: (uploadingProgress: number) => void
-) => {
-  let formData = new FormData();
-  formData.append("file", file);
+  chunk: Blob,
+  file: {
+    id?: string;
+    name: string;
+  },
+  chunkIndex: number,
+  totalChunks: number,
+): Promise<FileUploadResponse> => {
+  return (
+    await api.post(`shares/${shareId}/files`, chunk, {
+      headers: { "Content-Type": "application/octet-stream" },
+      params: {
+        id: file.id,
+        name: file.name,
+        chunkIndex,
+        totalChunks,
+      },
+    })
+  ).data;
+};
 
-  const response = await api.post(`shares/${shareId}/files`, formData, {
-    onUploadProgress: (progressEvent) => {
-      const uploadingProgress = Math.round(
-        (100 * progressEvent.loaded) / (progressEvent.total ?? 1)
-      );
-      if (uploadingProgress < 100) progressCallBack(uploadingProgress);
-    },
-  });
-  progressCallBack(100);
-  return response;
+const createReverseShare = async (
+  shareExpiration: string,
+  maxShareSize: number,
+  maxUseCount: number,
+  sendEmailNotification: boolean,
+  simplified: boolean,
+  publicAccess: boolean,
+) => {
+  return (
+    await api.post("reverseShares", {
+      shareExpiration,
+      maxShareSize: maxShareSize.toString(),
+      maxUseCount,
+      sendEmailNotification,
+      simplified,
+      publicAccess,
+    })
+  ).data;
+};
+
+const getMyReverseShares = async (): Promise<MyReverseShare[]> => {
+  return (await api.get("reverseShares")).data;
+};
+
+const setReverseShare = async (reverseShareToken: string) => {
+  const { data } = await api.get(`/reverseShares/${reverseShareToken}`);
+  setCookie("reverse_share_token", reverseShareToken);
+  return data;
+};
+
+const removeReverseShare = async (id: string) => {
+  await api.delete(`/reverseShares/${id}`);
 };
 
 export default {
+  list,
   create,
   completeShare,
+  revertComplete,
   getShareToken,
   get,
+  getFromOwner,
   remove,
   getMetaData,
+  doesFileSupportPreview,
   getMyShares,
   isShareIdAvailable,
   downloadFile,
+  removeFile,
   uploadFile,
+  setReverseShare,
+  createReverseShare,
+  getMyReverseShares,
+  removeReverseShare,
 };

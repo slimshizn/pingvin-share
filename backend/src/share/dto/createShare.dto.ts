@@ -1,9 +1,11 @@
 import { Type } from "class-transformer";
 import {
   IsEmail,
+  IsOptional,
   IsString,
   Length,
   Matches,
+  MaxLength,
   ValidateNested,
 } from "class-validator";
 import { ShareSecurityDTO } from "./shareSecurity.dto";
@@ -16,8 +18,16 @@ export class CreateShareDTO {
   @Length(3, 50)
   id: string;
 
+  @Length(3, 30)
+  @IsOptional()
+  name: string;
+
   @IsString()
   expiration: string;
+
+  @MaxLength(512)
+  @IsOptional()
+  description: string;
 
   @IsEmail({}, { each: true })
   recipients: string[];

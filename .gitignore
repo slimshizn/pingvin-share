@@ -7,6 +7,9 @@ node_modules
 /frontend/.next/
 /frontend/out/
 
+# yarn
+yarn.lock
+
 # build
 build/
 dist/
@@ -23,6 +26,7 @@ yarn-error.log*
 
 # env file
 .env
+!/backend/prisma/.env
 
 # vercel
 .vercel
@@ -37,6 +41,9 @@ yarn-error.log*
 # project specific
 /backend/data/
 /data/
+/docs/build/
+/docs/.docusaurus
+/docs/.cache-loader
 
 # Jetbrains specific (webstorm)
 .idea/**/**

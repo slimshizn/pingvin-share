@@ -16,19 +16,32 @@ export class UserDTO {
   @IsEmail()
   email: string;
 
+  @Expose()
+  hasPassword: boolean;
+
   @MinLength(8)
   password: string;
 
   @Expose()
   isAdmin: boolean;
 
+  @Expose()
+  isLdap: boolean;
+
+  ldapDN?: string;
+
+  @Expose()
+  totpVerified: boolean;
+
   from(partial: Partial<UserDTO>) {
-    return plainToClass(UserDTO, partial, { excludeExtraneousValues: true });
+    const result = plainToClass(UserDTO, partial, {
+      excludeExtraneousValues: true,
+    });
+    result.isLdap = partial.ldapDN?.length > 0;
+    return result;
   }
 
   fromList(partial: Partial<UserDTO>[]) {
-    return partial.map((part) =>
-      plainToClass(UserDTO, part, { excludeExtraneousValues: true })
-    );
+    return partial.map((part) => this.from(part));
   }
 }

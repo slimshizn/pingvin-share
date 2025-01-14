@@ -1,14 +1,7 @@
-import React from "react";
-import {
-  createStyles,
-  Title,
-  Text,
-  Button,
-  Container,
-  Group,
-} from "@mantine/core";
-import Meta from "../components/Meta";
+import { Button, Container, createStyles, Group, Title } from "@mantine/core";
 import Link from "next/link";
+import { FormattedMessage } from "react-intl";
+import Meta from "../components/Meta";
 
 const useStyles = createStyles((theme) => ({
   root: {
@@ -21,18 +14,12 @@ const useStyles = createStyles((theme) => ({
     fontWeight: 900,
     fontSize: 220,
     lineHeight: 1,
-    marginBottom: theme.spacing.xl * 1.5,
+    marginBottom: 20,
     color: theme.colors.gray[2],
 
     [theme.fn.smallerThan("sm")]: {
       fontSize: 120,
     },
-  },
-
-  description: {
-    maxWidth: 500,
-    margin: "auto",
-    marginBottom: theme.spacing.xl * 1.5,
   },
 }));
 
@@ -45,16 +32,11 @@ const ErrorNotFound = () => {
       <Container className={classes.root}>
         <div className={classes.label}>404</div>
         <Title align="center" order={3}>
-          Oops this page doesn't exist.
+          <FormattedMessage id="404.description" />
         </Title>
-        <Text
-          color="dimmed"
-          align="center"
-          className={classes.description}
-        ></Text>
-        <Group position="center">
+        <Group position="center" mt={50}>
           <Button component={Link} href="/" variant="light">
-            Bring me back
+            <FormattedMessage id="404.button.home" />
           </Button>
         </Group>
       </Container>

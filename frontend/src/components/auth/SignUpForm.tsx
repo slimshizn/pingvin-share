@@ -10,18 +10,31 @@ import {
 } from "@mantine/core";
 import { useForm, yupResolver } from "@mantine/form";
 import Link from "next/link";
+import { useRouter } from "next/router";
+import { FormattedMessage } from "react-intl";
 import * as yup from "yup";
 import useConfig from "../../hooks/config.hook";
+import useTranslate from "../../hooks/useTranslate.hook";
+import useUser from "../../hooks/user.hook";
 import authService from "../../services/auth.service";
 import toast from "../../utils/toast.util";
 
 const SignUpForm = () => {
   const config = useConfig();
+  const router = useRouter();
+  const t = useTranslate();
+  const { refreshUser } = useUser();
 
   const validationSchema = yup.object().shape({
-    email: yup.string().email().required(),
-    username: yup.string().min(3).required(),
-    password: yup.string().min(8).required(),
+    email: yup.string().email(t("common.error.invalid-email")).required(),
+    username: yup
+      .string()
+      .min(3, t("common.error.too-short", { length: 3 }))
+      .required(t("common.error.field-required")),
+    password: yup
+      .string()
+      .min(8, t("common.error.too-short", { length: 8 }))
+      .required(t("common.error.field-required")),
   });
 
   const form = useForm({
@@ -33,63 +46,58 @@ const SignUpForm = () => {
     validate: yupResolver(validationSchema),
   });
 
-  const signIn = (email: string, password: string) => {
-    authService
-      .signIn(email, password)
-      .then(() => window.location.replace("/"))
-      .catch(toast.axiosError);
-  };
-  const signUp = (email: string, username: string, password: string) => {
-    authService
-      .signUp(email, username, password)
-      .then(() => signIn(email, password))
+  const signUp = async (email: string, username: string, password: string) => {
+    await authService
+      .signUp(email.trim(), username.trim(), password.trim())
+      .then(async () => {
+        const user = await refreshUser();
+        if (user?.isAdmin) {
+          router.replace("/admin/intro");
+        } else {
+          router.replace("/upload");
+        }
+      })
       .catch(toast.axiosError);
   };
 
   return (
     <Container size={420} my={40}>
-      <Title
-        align="center"
-        sx={(theme) => ({
-          fontFamily: `Greycliff CF, ${theme.fontFamily}`,
-          fontWeight: 900,
-        })}
-      >
-        Sign up
+      <Title order={2} align="center" weight={900}>
+        <FormattedMessage id="signup.title" />
       </Title>
-      {config.get("ALLOW_REGISTRATION") && (
+      {config.get("share.allowRegistration") && (
         <Text color="dimmed" size="sm" align="center" mt={5}>
-          You have an account already?{" "}
+          <FormattedMessage id="signup.description" />{" "}
           <Anchor component={Link} href={"signIn"} size="sm">
-            Sign in
+            <FormattedMessage id="signup.button.signin" />
           </Anchor>
         </Text>
       )}
       <Paper withBorder shadow="md" p={30} mt={30} radius="md">
         <form
           onSubmit={form.onSubmit((values) =>
-            signUp(values.email, values.username, values.password)
+            signUp(values.email, values.username, values.password),
           )}
         >
           <TextInput
-            label="Username"
-            placeholder="john.doe"
+            label={t("signup.input.username")}
+            placeholder={t("signup.input.username.placeholder")}
             {...form.getInputProps("username")}
           />
           <TextInput
-            label="Email"
-            placeholder="you@email.com"
+            label={t("signup.input.email")}
+            placeholder={t("signup.input.email.placeholder")}
             mt="md"
             {...form.getInputProps("email")}
           />
           <PasswordInput
-            label="Password"
-            placeholder="Your password"
+            label={t("signin.input.password")}
+            placeholder={t("signin.input.password.placeholder")}
             mt="md"
             {...form.getInputProps("password")}
           />
           <Button fullWidth mt="xl" type="submit">
-            Let's get started
+            <FormattedMessage id="signup.button.submit" />
           </Button>
         </form>
       </Paper>

@@ -8,25 +8,27 @@ import {
   ThemeIcon,
   Title,
 } from "@mantine/core";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
 import { TbCheck } from "react-icons/tb";
+import { FormattedMessage } from "react-intl";
+import Logo from "../components/Logo";
 import Meta from "../components/Meta";
-import useConfig from "../hooks/config.hook";
 import useUser from "../hooks/user.hook";
+import useConfig from "../hooks/config.hook";
 
 const useStyles = createStyles((theme) => ({
   inner: {
     display: "flex",
     justifyContent: "space-between",
-    paddingTop: theme.spacing.xl * 4,
-    paddingBottom: theme.spacing.xl * 4,
+    paddingTop: `calc(${theme.spacing.md} * 4)`,
+    paddingBottom: `calc(${theme.spacing.md} * 4)`,
   },
 
   content: {
     maxWidth: 480,
-    marginRight: theme.spacing.xl * 3,
+    marginRight: `calc(${theme.spacing.md} * 3)`,
 
     [theme.fn.smallerThan("md")]: {
       maxWidth: "100%",
@@ -69,94 +71,117 @@ const useStyles = createStyles((theme) => ({
 }));
 
 export default function Home() {
-  const config = useConfig();
-  const user = useUser();
-
   const { classes } = useStyles();
+  const { refreshUser } = useUser();
   const router = useRouter();
-  if (user || config.get("ALLOW_UNAUTHENTICATED_SHARES")) {
-    router.replace("/upload");
-  } else if (!config.get("SHOW_HOME_PAGE")) {
-    router.replace("/auth/signIn");
-  } else {
-    return (
-      <>
-        <Meta title="Home" />
-        <Container>
-          <div className={classes.inner}>
-            <div className={classes.content}>
-              <Title className={classes.title}>
-                A <span className={classes.highlight}>self-hosted</span> <br />{" "}
-                file sharing platform.
-              </Title>
-              <Text color="dimmed" mt="md">
-                Do you really want to give your personal files in the hand of
-                third parties like WeTransfer?
-              </Text>
+  const config = useConfig();
+  const [signupEnabled, setSignupEnabled] = useState(true);
 
-              <List
-                mt={30}
-                spacing="sm"
-                size="sm"
-                icon={
-                  <ThemeIcon size={20} radius="xl">
-                    <TbCheck size={12} />
-                  </ThemeIcon>
-                }
-              >
-                <List.Item>
-                  <div>
-                    <b>Self-Hosted</b> - Host Pingvin Share on your own machine.
-                  </div>
-                </List.Item>
-                <List.Item>
-                  <div>
-                    <b>Privacy</b> - Your files are your files and should never
-                    get into the hands of third parties.
-                  </div>
-                </List.Item>
-                <List.Item>
-                  <div>
-                    <b>No annoying file size limit</b> - Upload as big files as
-                    you want. Only your hard drive will be your limit.
-                  </div>
-                </List.Item>
-              </List>
+  // If user is already authenticated, redirect to the upload page
+  useEffect(() => {
+    refreshUser().then((user) => {
+      if (user) {
+        router.replace("/upload");
+      }
+    });
 
-              <Group mt={30}>
-                <Button
-                  component={Link}
-                  href="/auth/signUp"
-                  radius="xl"
-                  size="md"
-                  className={classes.control}
-                >
-                  Get started
-                </Button>
-                <Button
-                  component={Link}
-                  href="https://github.com/stonith404/pingvin-share"
-                  target="_blank"
-                  variant="default"
-                  radius="xl"
-                  size="md"
-                  className={classes.control}
-                >
-                  Source code
-                </Button>
-              </Group>
-            </div>
-            <Group className={classes.image} align="center">
-              <Image
-                src="/img/logo.svg"
-                alt="Pingvin Share Logo"
-                width={200}
-                height={200}
+    // If registration is disabled, get started button should redirect to the sign in page
+    try {
+      const allowRegistration = config.get("share.allowRegistration");
+      setSignupEnabled(allowRegistration !== false);
+    } catch (error) {
+      setSignupEnabled(true);
+    }
+  }, [config]);
+
+  const getButtonHref = () => {
+    return signupEnabled ? "/auth/signUp" : "/auth/signIn";
+  };
+
+  return (
+    <>
+      <Meta title="Home" />
+      <Container>
+        <div className={classes.inner}>
+          <div className={classes.content}>
+            <Title className={classes.title}>
+              <FormattedMessage
+                id="home.title"
+                values={{
+                  h: (chunks) => (
+                    <span className={classes.highlight}>{chunks}</span>
+                  ),
+                }}
               />
+            </Title>
+            <Text color="dimmed" mt="md">
+              <FormattedMessage id="home.description" />
+            </Text>
+
+            <List
+              mt={30}
+              spacing="sm"
+              size="sm"
+              icon={
+                <ThemeIcon size={20} radius="xl">
+                  <TbCheck size={12} />
+                </ThemeIcon>
+              }
+            >
+              <List.Item>
+                <div>
+                  <b>
+                    <FormattedMessage id="home.bullet.a.name" />
+                  </b>{" "}
+                  - <FormattedMessage id="home.bullet.a.description" />
+                </div>
+              </List.Item>
+              <List.Item>
+                <div>
+                  <b>
+                    <FormattedMessage id="home.bullet.b.name" />
+                  </b>{" "}
+                  - <FormattedMessage id="home.bullet.b.description" />
+                </div>
+              </List.Item>
+              <List.Item>
+                <div>
+                  <b>
+                    <FormattedMessage id="home.bullet.c.name" />
+                  </b>{" "}
+                  - <FormattedMessage id="home.bullet.c.description" />
+                </div>
+              </List.Item>
+            </List>
+
+            <Group mt={30}>
+              <Button
+                component={Link}
+                href={getButtonHref()}
+                radius="xl"
+                size="md"
+                className={classes.control}
+              >
+                <FormattedMessage id="home.button.start" />
+              </Button>
+              <Button
+                component={Link}
+                href="https://github.com/stonith404/pingvin-share"
+                target="_blank"
+                variant="default"
+                radius="xl"
+                size="md"
+                className={classes.control}
+              >
+                <FormattedMessage id="home.button.source" />
+              </Button>
             </Group>
           </div>
-        </Container>
-      </>
-    );
-  }
+          <Group className={classes.image} align="center">
+            <Logo width={200} height={200} />
+          </Group>
+        </div>
+      </Container>
+    </>
+  );
 }

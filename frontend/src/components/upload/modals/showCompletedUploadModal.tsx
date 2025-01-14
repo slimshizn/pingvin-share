@@ -1,57 +1,54 @@
-import {
-  ActionIcon,
-  Button,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from "@mantine/core";
-import { useClipboard } from "@mantine/hooks";
+import { Button, Stack, Text } from "@mantine/core";
 import { useModals } from "@mantine/modals";
 import { ModalsContextProps } from "@mantine/modals/lib/context";
 import moment from "moment";
 import { useRouter } from "next/router";
-import { TbCopy } from "react-icons/tb";
-import { Share } from "../../../types/share.type";
-import toast from "../../../utils/toast.util";
+import { FormattedMessage } from "react-intl";
+import useTranslate, {
+  translateOutsideContext,
+} from "../../../hooks/useTranslate.hook";
+import { CompletedShare } from "../../../types/share.type";
+import CopyTextField from "../CopyTextField";
 
-const showCompletedUploadModal = (modals: ModalsContextProps, share: Share) => {
+const showCompletedUploadModal = (
+  modals: ModalsContextProps,
+  share: CompletedShare,
+) => {
+  const t = translateOutsideContext();
   return modals.openModal({
     closeOnClickOutside: false,
     withCloseButton: false,
     closeOnEscape: false,
-    title: (
-      <Stack align="stretch" spacing={0}>
-        <Title order={4}>Share ready</Title>
-      </Stack>
-    ),
+    title: t("upload.modal.completed.share-ready"),
     children: <Body share={share} />,
   });
 };
 
-const Body = ({ share }: { share: Share }) => {
-  const clipboard = useClipboard({ timeout: 500 });
+const Body = ({ share }: { share: CompletedShare }) => {
   const modals = useModals();
   const router = useRouter();
-  const link = `${window.location.origin}/share/${share.id}`;
+  const t = useTranslate();
+
+  const isReverseShare = !!router.query["reverseShareToken"];
+
+  const link = `${window.location.origin}/s/${share.id}`;
+
   return (
     <Stack align="stretch">
-      <TextInput
-        variant="filled"
-        value={link}
-        rightSection={
-          window.isSecureContext && (
-            <ActionIcon
-              onClick={() => {
-                clipboard.copy(link);
-                toast.success("Your link was copied to the keyboard.");
-              }}
-            >
-              <TbCopy />
-            </ActionIcon>
-          )
-        }
-      />
+      <CopyTextField link={link} />
+      {share.notifyReverseShareCreator === true && (
+        <Text
+          size="sm"
+          sx={(theme) => ({
+            color:
+              theme.colorScheme === "dark"
+                ? theme.colors.gray[3]
+                : theme.colors.dark[4],
+          })}
+        >
+          {t("upload.modal.completed.notified-reverse-share-creator")}
+        </Text>
+      )}
       <Text
         size="xs"
         sx={(theme) => ({
@@ -60,19 +57,23 @@ const Body = ({ share }: { share: Share }) => {
       >
         {/* If our share.expiration is timestamp 0, show a different message */}
         {moment(share.expiration).unix() === 0
-          ? "This share will never expire."
-          : `This share will expire on ${moment(share.expiration).format(
-              "LLL"
-            )}`}
+          ? t("upload.modal.completed.never-expires")
+          : t("upload.modal.completed.expires-on", {
+              expiration: moment(share.expiration).format("LLL"),
+            })}
       </Text>
 
       <Button
         onClick={() => {
           modals.closeAll();
-          router.push("/upload");
+          if (isReverseShare) {
+            router.reload();
+          } else {
+            router.push("/upload");
+          }
         }}
       >
-        Done
+        <FormattedMessage id="common.button.done" />
       </Button>
     </Stack>
   );

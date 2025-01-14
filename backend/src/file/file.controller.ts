@@ -1,104 +1,106 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
+  Query,
   Res,
   StreamableFile,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
+import { SkipThrottle } from "@nestjs/throttler";
 import * as contentDisposition from "content-disposition";
 import { Response } from "express";
-import { JwtGuard } from "src/auth/guard/jwt.guard";
-import { FileDownloadGuard } from "src/file/guard/fileDownload.guard";
-import { ShareDTO } from "src/share/dto/share.dto";
+import { CreateShareGuard } from "src/share/guard/createShare.guard";
 import { ShareOwnerGuard } from "src/share/guard/shareOwner.guard";
-import { ShareSecurityGuard } from "src/share/guard/shareSecurity.guard";
 import { FileService } from "./file.service";
+import { FileSecurityGuard } from "./guard/fileSecurity.guard";
+import * as mime from "mime-types";
 
 @Controller("shares/:shareId/files")
 export class FileController {
   constructor(private fileService: FileService) {}
 
   @Post()
-  @UseGuards(JwtGuard, ShareOwnerGuard)
-  @UseInterceptors(
-    FileInterceptor("file", {
-      dest: "./data/uploads/_temp/",
-    })
-  )
+  @SkipThrottle()
+  @UseGuards(CreateShareGuard, ShareOwnerGuard)
   async create(
-    @UploadedFile()
-    file: Express.Multer.File,
-    @Param("shareId") shareId: string
+    @Query()
+    query: {
+      id: string;
+      name: string;
+      chunkIndex: string;
+      totalChunks: string;
+    },
+    @Body() body: string,
+    @Param("shareId") shareId: string,
   ) {
-    // Fixes file names with special characters
-    file.originalname = Buffer.from(file.originalname, "latin1").toString(
-      "utf8"
+    const { id, name, chunkIndex, totalChunks } = query;
+
+    // Data can be empty if the file is empty
+    return await this.fileService.create(
+      body,
+      { index: parseInt(chunkIndex), total: parseInt(totalChunks) },
+      { id, name },
+      shareId,
     );
-    return new ShareDTO().from(await this.fileService.create(file, shareId));
-  }
-
-  @Get(":fileId/download")
-  @UseGuards(ShareSecurityGuard)
-  async getFileDownloadUrl(
-    @Res({ passthrough: true }) res: Response,
-    @Param("shareId") shareId: string,
-    @Param("fileId") fileId: string
-  ) {
-    const url = this.fileService.getFileDownloadUrl(shareId, fileId);
-
-    return { url };
-  }
-
-  @Get("zip/download")
-  @UseGuards(ShareSecurityGuard)
-  async getZipArchiveDownloadURL(
-    @Res({ passthrough: true }) res: Response,
-    @Param("shareId") shareId: string,
-    @Param("fileId") fileId: string
-  ) {
-    const url = this.fileService.getFileDownloadUrl(shareId, fileId);
-
-    res.set({
-      "Content-Type": "application/zip",
-    });
-
-    return { url };
   }
 
   @Get("zip")
-  @UseGuards(FileDownloadGuard)
+  @UseGuards(FileSecurityGuard)
   async getZip(
     @Res({ passthrough: true }) res: Response,
-    @Param("shareId") shareId: string
+    @Param("shareId") shareId: string,
   ) {
-    const zip = this.fileService.getZip(shareId);
+    const zipStream = this.fileService.getZip(shareId);
+
     res.set({
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment ; filename="pingvin-share-${shareId}.zip"`,
+      "Content-Disposition": contentDisposition(`${shareId}.zip`),
     });
 
-    return new StreamableFile(zip);
+    return new StreamableFile(zipStream);
   }
 
   @Get(":fileId")
-  @UseGuards(FileDownloadGuard)
+  @UseGuards(FileSecurityGuard)
   async getFile(
     @Res({ passthrough: true }) res: Response,
     @Param("shareId") shareId: string,
-    @Param("fileId") fileId: string
+    @Param("fileId") fileId: string,
+    @Query("download") download = "true",
   ) {
     const file = await this.fileService.get(shareId, fileId);
-    res.set({
-      "Content-Type": file.metaData.mimeType,
+
+    const headers = {
+      "Content-Type":
+        mime?.lookup?.(file.metaData.name) || "application/octet-stream",
       "Content-Length": file.metaData.size,
-      "Content-Disposition": contentDisposition(file.metaData.name),
-    });
+      "Content-Security-Policy": "script-src 'none'",
+    };
+
+    if (download === "true") {
+      headers["Content-Disposition"] = contentDisposition(file.metaData.name);
+    } else {
+      headers["Content-Disposition"] = contentDisposition(file.metaData.name, {
+        type: "inline",
+      });
+    }
+
+    res.set(headers);
 
     return new StreamableFile(file.file);
+  }
+
+  @Delete(":fileId")
+  @SkipThrottle()
+  @UseGuards(ShareOwnerGuard)
+  async remove(
+    @Param("fileId") fileId: string,
+    @Param("shareId") shareId: string,
+  ) {
+    await this.fileService.remove(shareId, fileId);
   }
 }
